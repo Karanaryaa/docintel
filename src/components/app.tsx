@@ -16,7 +16,22 @@ export function App() {
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
   const [invoices, setInvoices] = useState<InvoiceWithName[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("ask");
+  const [tab, setTabState] = useState<Tab>("ask");
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", t === "ask" ? window.location.pathname : `#${t}`);
+    }
+  }, []);
+  useEffect(() => {
+    const fromHash = () => {
+      const h = window.location.hash.replace("#", "");
+      if (h === "invoices" || h === "compare" || h === "ask") setTabState(h);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
+  }, []);
   const [viewerPage, setViewerPage] = useState(1);
   const [busy, setBusy] = useState(false);
 
