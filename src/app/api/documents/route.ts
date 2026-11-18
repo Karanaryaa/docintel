@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     name: file.name,
     sizeBytes: file.size,
     pageCount: 0,
-    status: "processing",
+    status: "uploaded",
     createdAt: new Date().toISOString(),
     storageKey: `${id}.pdf`,
     ocrPages: [],
