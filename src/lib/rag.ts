@@ -55,9 +55,10 @@ async function retrieve(store: Store, question: string, documentId?: string): Pr
   // question still gets a grounded, cited answer instead of hanging.
   const ranked = rankLexical(
     all.filter((c) => !documentId || c.documentId === documentId),
-    question
+    question,
+    TOP_K
   );
-  return { ranked: ranked.slice(0, TOP_K), lexical: true };
+  return { ranked, lexical: true };
 }
 
 
@@ -71,13 +72,15 @@ export function looksLikeToc(text: string): boolean {
 
 /**
  * Term-overlap ranking used only when the embedding provider is down.
- * Whole-word matching keeps "main" from matching "remains", and TOC pages
- * are demoted because they mention every chapter title without the prose
- * a question is actually about.
+ * Whole-word matching keeps "main" from matching "remains". A contents page
+ * mentions every chapter title without any prose, so it never outranks body
+ * text; the best one is still appended (at most TOP_K results) because a
+ * structure question ("the first chapter") can only be resolved with it.
  */
 export function rankLexical<T extends { text: string }>(
   chunks: T[],
-  question: string
+  question: string,
+  limit = 6
 ): Array<T & { score: number }> {
   const terms = [
     ...new Set(question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)),
@@ -86,17 +89,19 @@ export function rankLexical<T extends { text: string }>(
   const words = terms.map(
     (t) => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
   );
-  return chunks
+  const scored = chunks
     .map((c) => {
       const hits = words.filter((w) => w.test(c.text)).length;
-      let score = hits / terms.length;
-      if (looksLikeToc(c.text)) score *= 0.2;
-      return { ...c, score };
+      return { ...c, score: hits / terms.length, toc: looksLikeToc(c.text) };
     })
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score);
+  const prose = scored.filter((c) => !c.toc);
+  const toc = scored.filter((c) => c.toc);
+  const picked = [...prose.slice(0, Math.max(1, limit - (toc.length ? 1 : 0)))];
+  if (toc.length > 0 && picked.length < limit) picked.push(toc[0]);
+  return picked.map(({ toc: _toc, ...c }) => c as T & { score: number });
 }
-
 /**
  * Answer a question with page-level citations. The model is instructed to
  * cite only the supplied chunks and to say when the documents do not contain
@@ -193,7 +198,9 @@ function buildMessages(context: string, question: string) {
       role: "system" as const,
       content:
         "You answer questions about uploaded documents. Rules: use ONLY the numbered excerpts below. " +
-        "Every claim must cite its excerpt like [1] or [2]. If the excerpts do not contain the answer, " +
+        "Every claim must cite its excerpt like [1] or [2]. If an excerpt is a table of contents, use it only to " +
+        "locate where a topic is covered; answer from the excerpts that carry the actual content. " +
+        "If the excerpts do not contain the answer, " +
         'reply exactly: "The documents do not say." Never use outside knowledge. Keep answers tight.',
     },
     {
