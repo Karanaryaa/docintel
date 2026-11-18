@@ -1,5 +1,5 @@
 import { extractPdfPages, looksLikeInvoice } from "./pdf-extract";
-import { renderPageToDataUrl } from "./pdf-render";
+import { renderPageToPng, extractEmbeddedPagePng } from "./pdf-render";
 import { ocrPageImage } from "./ai";
 import { indexDocument } from "./rag";
 import { extractInvoice } from "./invoice-extract";
@@ -39,7 +39,12 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
           try {
             let dataUrl: string;
             try {
-              dataUrl = await renderPageToDataUrl(bytes, p);
+              // Prefer the embedded scan image: pg.render can fail on image
+              // pages inside serverless background tasks (after()).
+              const png =
+                (await extractEmbeddedPagePng(bytes, p).catch(() => null)) ??
+                (await renderPageToPng(bytes, p));
+              dataUrl = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
             } catch (err) {
               throw new Error(`render p${p}: ${describe(err)}`);
             }

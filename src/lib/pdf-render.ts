@@ -36,3 +36,45 @@ export async function renderPageToDataUrl(bytes: Uint8Array, page: number): Prom
   const png = await renderPageToPng(bytes, page);
   return `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
 }
+
+/**
+ * For scanned pages (one big embedded raster per page), pull the embedded
+ * image straight out of the PDF instead of running pdfjs's full renderer.
+ * pg.render can fail in serverless background tasks (after()) with
+ * "Cannot transfer object of unsupported type" on image pages; this path
+ * never touches it. Returns null when the page has no large embedded image
+ * (caller falls back to renderPageToPng).
+ */
+export async function extractEmbeddedPagePng(bytes: Uint8Array, page: number): Promise<Uint8Array | null> {
+  const { extractImages } = await import("unpdf");
+  const canvasPkg = await import("@napi-rs/canvas");
+  const images = await extractImages(bytes, page);
+  const img = images.reduce<(typeof images)[number] | null>(
+    (best, cur) => (cur.width * cur.height > (best?.width ?? 0) * (best?.height ?? 0) ? cur : best),
+    null
+  );
+  // A page scan is a large image; small ones are logos/decorations.
+  if (!img || img.width * img.height < 300 * 300) return null;
+
+  const px = img.width * img.height;
+  const rgba = new Uint8ClampedArray(px * 4);
+  if (img.channels === 4) {
+    rgba.set(img.data.subarray(0, px * 4));
+  } else if (img.channels === 3) {
+    for (let i = 0, j = 0; j < rgba.length; i += 3, j += 4) {
+      rgba[j] = img.data[i];
+      rgba[j + 1] = img.data[i + 1];
+      rgba[j + 2] = img.data[i + 2];
+      rgba[j + 3] = 255;
+    }
+  } else {
+    for (let i = 0, j = 0; j < rgba.length; i += 1, j += 4) {
+      rgba[j] = rgba[j + 1] = rgba[j + 2] = img.data[i];
+      rgba[j + 3] = 255;
+    }
+  }
+  const canvas = canvasPkg.createCanvas(img.width, img.height);
+  const ctx = canvas.getContext("2d");
+  ctx.putImageData(new canvasPkg.ImageData(rgba, img.width, img.height), 0, 0);
+  return new Uint8Array(canvas.toBuffer("image/png"));
+}
