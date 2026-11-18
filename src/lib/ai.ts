@@ -14,9 +14,10 @@ interface ChatMessage {
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
-async function aiChat(messages: ChatMessage[], opts: { model?: string; json?: boolean; maxTokens?: number; temperature?: number } = {}): Promise<string> {
+async function aiChat(messages: ChatMessage[], opts: { model?: string; json?: boolean; maxTokens?: number; temperature?: number; timeoutMs?: number } = {}): Promise<string> {
   const res = await fetch(`${AI_BASE}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),
     headers: {
       Authorization: `Bearer ${aiKey()}`,
       "Content-Type": "application/json",

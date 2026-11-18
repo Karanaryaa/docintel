@@ -96,9 +96,14 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
     setInput("");
     setLoading(true);
     setMessages((m) => [...m, { role: "user", question, answer: "", citations: [], insufficientEvidence: false }]);
+    // Bound the wait: abort after 2 minutes and say so, rather than
+    // spinning forever when the AI provider is slow.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 120_000);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, documentId: askedScope }),
       });
@@ -122,14 +127,23 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
       } else {
         setMessages((m) => [...m, reply]);
       }
-    } catch {
+    } catch (err) {
+      const timedOut = err instanceof DOMException && err.name === "AbortError";
       if (scopeRef.current === askedScope) {
         setMessages((m) => [
           ...m,
-          { role: "assistant", answer: "Something went wrong reaching the server.", citations: [], insufficientEvidence: false },
+          {
+            role: "assistant",
+            answer: timedOut
+              ? "The AI service took too long to respond (over 2 minutes). Please try again."
+              : "Something went wrong reaching the server.",
+            citations: [],
+            insufficientEvidence: false,
+          },
         ]);
       }
     } finally {
+      clearTimeout(abortTimer);
       setLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }

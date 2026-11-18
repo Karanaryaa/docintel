@@ -23,6 +23,21 @@ export async function POST(req: NextRequest) {
   if (!body.documentId) {
     return NextResponse.json({ error: "documentId is required" }, { status: 400 });
   }
-  const answer = await answerQuestion(getStore(), question, body.documentId);
-  return NextResponse.json(answer);
+  try {
+    const answer = await answerQuestion(getStore(), question, body.documentId);
+    return NextResponse.json(answer);
+  } catch (err) {
+    // Model/embedding calls carry hard timeouts; surface them honestly
+    // instead of hanging until the function limit.
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      return NextResponse.json(
+        { error: "The AI service took too long to respond. Please try again." },
+        { status: 504 }
+      );
+    }
+    return NextResponse.json(
+      { error: "The AI service could not answer right now. Please try again." },
+      { status: 502 }
+    );
+  }
 }

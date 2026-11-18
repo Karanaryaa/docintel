@@ -46,11 +46,22 @@ async function retrieve(store: Store, question: string, documentId?: string): Pr
  * cite only the supplied chunks and to say when the documents do not contain
  * the answer; citation markers [1], [2] map to retrieved chunks.
  */
+// Trivial small talk never touches retrieval or the model: a greeting that
+// went through the full pipeline once took over a minute to answer.
+const SMALL_TALK = /^(hey+|hi+|hello+|yo|hiya|howdy|namaste|good (morning|afternoon|evening)|thanks?( you)?|ok(ay)?|cool|nice|great|bye|good ?night)[!.,\s]*$/i;
+
 export async function answerQuestion(
   store: Store,
   question: string,
   documentId?: string
 ): Promise<ChatAnswer> {
+  if (question.length <= 30 && SMALL_TALK.test(question.trim())) {
+    return {
+      answer: "Hey! Ask me anything about this document and I'll answer with page citations.",
+      citations: [],
+      insufficientEvidence: false,
+    };
+  }
   let ranked = await retrieve(store, question, documentId);
   if ((ranked.length === 0 || ranked[0].score < MIN_SCORE) && documentId) {
     // Generic questions about a selected document ("whats this?") don't
