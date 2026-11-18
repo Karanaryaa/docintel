@@ -6,12 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test src/lib/__tests__/chunk.test.ts src/lib/__tests__/invoice-checks.test.ts",
+    "test:e2e": "tsx scripts/e2e-local.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
+    "@napi-rs/canvas": "^1.1.1",
+    "@vercel/blob": "^2.9.0",
     "next": "16.4.6",
+    "pdf-lib": "^1.17.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "unpdf": "^1.9.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
@@ -21,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

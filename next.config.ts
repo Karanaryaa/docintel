@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Native/binary and model-loading packages must be required from
+  // node_modules at runtime, not bundled into the route chunk.
+  serverExternalPackages: ["@napi-rs/canvas", "@huggingface/transformers", "unpdf"],
   turbopack: {
     rules: {
       "*.css": {

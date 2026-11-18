@@ -1,0 +1,55 @@
+{
+  "invoice-clean.pdf": {
+    "vendorName": "Acme Traders",
+    "invoiceNumber": "INV-2026-001",
+    "invoiceDate": "2026-01-05",
+    "dueDate": "2026-02-05",
+    "subtotal": 4000,
+    "taxAmount": 720,
+    "taxRate": 18,
+    "total": 4720,
+    "expectFlags": []
+  },
+  "invoice-badmath.pdf": {
+    "vendorName": "Bright Supplies Co",
+    "invoiceNumber": "BS-991",
+    "invoiceDate": "2026-01-10",
+    "dueDate": "2026-02-10",
+    "subtotal": 5000,
+    "taxAmount": 900,
+    "taxRate": 18,
+    "total": 5200,
+    "expectFlags": [
+      "LINE_SUM_MISMATCH",
+      "TOTAL_MISMATCH",
+      "TAX_MISMATCH"
+    ]
+  },
+  "invoice-duplicate.pdf": {
+    "vendorName": "Acme Traders",
+    "invoiceNumber": "INV-2026-001",
+    "invoiceDate": "2026-01-06",
+    "dueDate": null,
+    "subtotal": 1000,
+    "taxAmount": null,
+    "taxRate": null,
+    "total": 1000,
+    "expectFlags": [
+      "DUPLICATE_INVOICE"
+    ]
+  },
+  "lease.pdf": {
+    "qa": [
+      {
+        "question": "What is the security deposit and when is it refunded?",
+        "mustMention": "50,000",
+        "expectPage": 2
+      },
+      {
+        "question": "How much is the monthly rent?",
+        "mustMention": "25,000",
+        "expectPage": 1
+      }
+    ]
+  }
+}
