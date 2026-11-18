@@ -11,13 +11,20 @@ interface Message extends ChatAnswer {
 
 interface Props {
   documents: DocumentMeta[];
+  selectedId: string | null;
   onOpenCitation: (documentId: string, page: number) => void;
 }
 
-export function ChatPanel({ documents, onOpenCitation }: Props) {
+export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [scope, setScope] = useState<string>("");
+
+  // Clicking a document in the sidebar scopes the chat to it, so a question
+  // asked right after selecting a doc is about that doc. Still user-overridable.
+  useEffect(() => {
+    if (selectedId) setScope(selectedId);
+  }, [selectedId]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 

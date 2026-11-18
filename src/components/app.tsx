@@ -137,7 +137,7 @@ export function App() {
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {tab === "ask" && (
-            <ChatPanel documents={documents} onOpenCitation={openCitation} />
+            <ChatPanel documents={documents} selectedId={selectedId} onOpenCitation={openCitation} />
           )}
           {tab === "invoices" && (
             <InvoicesPanel
