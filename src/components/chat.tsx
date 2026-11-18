@@ -9,6 +9,11 @@ interface Message extends ChatAnswer {
   question?: string;
 }
 
+// Render the model's **bold** markers instead of showing literal asterisks.
+function renderAnswer(text: string) {
+  return text.split(/\*\*([^*]+)\*\*/g).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
 interface Props {
   documents: DocumentMeta[];
   selectedId: string | null;
@@ -66,11 +71,8 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
     }
   }, [messages, scope]);
 
-  useEffect(() => {
-    if (!confirmClear) return;
-    const t = setTimeout(() => setConfirmClear(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmClear]);
+  // "Sure?" stays armed until clicked or the file is switched (scope effect
+  // resets it) - a short auto-reset made the confirm easy to miss.
 
   // Deletes only the chat for the current scope - never the source PDF.
   function clearChat() {
@@ -160,7 +162,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
               </div>
             ) : (
               <div key={i} className="rounded-2xl rounded-bl-sm border border-line bg-card p-4">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.answer}</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{renderAnswer(m.answer)}</p>
                 {m.citations.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-3">
                     {m.citations.map((c, j) => (
