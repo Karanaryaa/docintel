@@ -33,6 +33,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
     if (selectedId) setScope(selectedId);
   }, [selectedId]);
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState("Reading the documents");
   const bottomRef = useRef<HTMLDivElement>(null);
   const scopeRef = useRef(scope);
   useEffect(() => {
@@ -138,9 +139,12 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
           for (const line of lines) {
             if (!line.trim()) continue;
             const ev = JSON.parse(line) as
+              | { type: "stage"; text: string }
               | { type: "delta"; text: string }
               | { type: "final"; answer: ChatAnswer };
-            if (ev.type === "delta") {
+            if (ev.type === "stage") {
+              setStage(ev.text);
+            } else if (ev.type === "delta") {
               accumulated += ev.text;
               if (scopeRef.current === askedScope) {
                 if (!bubbleStarted) {
@@ -267,7 +271,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
           )}
           {loading && (
             <div className="text-ink-faint">
-              <WorkingIndicator label="Reading the documents" compact />
+              <WorkingIndicator label={stage} compact />
             </div>
           )}
           <div ref={bottomRef} />

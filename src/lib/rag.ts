@@ -162,6 +162,7 @@ function finalizeAnswer(raw: string, ranked: RankedChunk[], docs: Map<string, st
 }
 
 export type AnswerEvent =
+  | { type: "stage"; text: string }
   | { type: "delta"; text: string }
   | { type: "final"; answer: ChatAnswer };
 
@@ -193,6 +194,7 @@ export async function* answerQuestionEvents(
     }
   }
 
+  yield { type: "stage", text: "Finding the relevant pages" };
   const ranked = await retrieveWithFallback(store, question, documentId);
   if (ranked.length === 0 || ranked[0].score < MIN_SCORE) {
     const answer: ChatAnswer = {
@@ -207,6 +209,7 @@ export async function* answerQuestionEvents(
 
   const docs = await docNames(store, ranked);
   const context = buildContext(ranked, docs);
+  yield { type: "stage", text: `Found ${ranked.length} relevant passages - asking the AI` };
   const stream = await chatStream(buildMessages(context, question));
 
   // Parse the OpenAI-style SSE stream and forward content deltas.

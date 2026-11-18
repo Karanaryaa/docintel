@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { randomUUID } from "node:crypto";
 import { getStore } from "@/lib/store";
@@ -36,16 +36,20 @@ export async function POST(req: NextRequest) {
     name: file.name,
     sizeBytes: file.size,
     pageCount: 0,
-    status: "uploaded",
+    status: "processing",
     createdAt: new Date().toISOString(),
     storageKey: `${id}.pdf`,
     ocrPages: [],
     kind: "document",
+    progress: "Queued",
   };
 
   const store = getStore();
   await store.putDocument(meta, bytes);
-  await processDocument(store, meta);
-  const final = await store.getDocument(id);
-  return NextResponse.json({ document: final }, { status: 201 });
+  // Ingest runs after the response: the upload returns in about a second
+  // and the UI polls the document status/progress until it is ready.
+  after(async () => {
+    await processDocument(store, meta);
+  });
+  return NextResponse.json({ document: meta }, { status: 201 });
 }

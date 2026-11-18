@@ -13,6 +13,8 @@ export interface DocumentMeta {
   /** pages that had too little embedded text and need vision OCR */
   ocrPages: number[];
   kind: "invoice" | "document";
+  /** live human-readable ingest stage, shown while status is processing */
+  progress?: string;
 }
 
 export interface Chunk {

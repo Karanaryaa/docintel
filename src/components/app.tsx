@@ -61,6 +61,14 @@ export function App() {
     if (wanted) setSelectedId(wanted);
   }, [refresh]);
 
+  // While any document is still being ingested, poll so its live progress
+  // stage (extracting, OCR page counts, indexing) stays current.
+  useEffect(() => {
+    if (!documents.some((d) => d.status === "processing" || d.status === "uploaded")) return;
+    const t = setTimeout(refresh, 2000);
+    return () => clearTimeout(t);
+  }, [documents, refresh]);
+
   const selected = useMemo(
     () => documents.find((d) => d.id === selectedId) ?? null,
     [documents, selectedId]
@@ -79,6 +87,8 @@ export function App() {
           continue;
         }
         setSelectedId(json.document.id);
+        // ingest now runs in the background; the poll above picks it up
+        refresh();
       }
       await refresh();
     } finally {

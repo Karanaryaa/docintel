@@ -9,9 +9,14 @@
 export async function renderPageToPng(bytes: Uint8Array, page: number): Promise<Uint8Array> {
   const { getDocumentProxy } = await import("unpdf");
   const canvasPkg = await import("@napi-rs/canvas");
-  const g = globalThis as Record<string, unknown>;
+  const g = globalThis as Record<string | symbol, unknown>;
   if (!g.Path2D) g.Path2D = canvasPkg.Path2D;
   if (!g.ImageData) g.ImageData = canvasPkg.ImageData;
+  // Pages with embedded raster images make pdfjs create scratch canvases
+  // through unpdf's NodeCanvasFactory, which reads this global. Without it,
+  // image pages fail with "@napi-rs/canvas is not available".
+  const slot = Symbol.for("unpdf.canvasModule");
+  if (!g[slot]) g[slot] = canvasPkg;
 
   const pdf = await getDocumentProxy(bytes);
   const pageNum = Math.min(Math.max(1, page), pdf.numPages);

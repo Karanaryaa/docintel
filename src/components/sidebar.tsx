@@ -122,7 +122,7 @@ function StatusBadge({ doc }: { doc: DocumentMeta }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-warn/10 px-2 py-0.5 font-medium text-warn">
         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />
-        processing
+        {doc.progress ?? "processing"}
       </span>
     );
   }
