@@ -251,9 +251,11 @@ export async function* answerQuestionEvents(
     raw += "\n\n*(This answer hit the length limit - ask a follow-up for the rest.)*";
   }
   const answer = finalizeAnswer(raw, ranked, docs);
-  // Only cache answers the provider finished cleanly (saw [DONE]); a stream
-  // that died mid-generation never enters the cache.
-  if (documentId && sawDone) {
+  // Only cache answers the provider finished cleanly and completely (saw
+  // [DONE], not cut off by the token cap): a stream that died mid-generation
+  // or was truncated never enters the cache, so repeats never serve a
+  // cut-off answer as if it were the full one.
+  if (documentId && sawDone && !truncated) {
     await setCachedAnswer(documentId, question, answer).catch(() => {});
   }
   yield { type: "final", answer };
