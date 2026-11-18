@@ -163,14 +163,19 @@ function buildMessages(context: string, question: string) {
   ];
 }
 
-function finalizeAnswer(raw: string, ranked: RankedChunk[], docs: Map<string, string>): ChatAnswer {
+export function finalizeAnswer(raw: string, ranked: RankedChunk[], docs: Map<string, string>): ChatAnswer {
   const insufficient = /documents do not say/i.test(raw);
   const citations: Citation[] = [];
   if (!insufficient) {
     const used = new Set<number>();
-    for (const m of raw.matchAll(/\[(\d+)\]/g)) {
-      const n = parseInt(m[1], 10);
-      if (n >= 1 && n <= ranked.length) used.add(n);
+    // Models cite both single markers ([1]) and grouped ones ([1, 2]); a
+    // plain \[(\d+)\] misses grouped numbers entirely, leaving the chip
+    // list short. Parse every number inside any bracket group.
+    for (const m of raw.matchAll(/\[([\d,\s]+)\]/g)) {
+      for (const part of m[1].split(",")) {
+        const n = parseInt(part.trim(), 10);
+        if (Number.isFinite(n) && n >= 1 && n <= ranked.length) used.add(n);
+      }
     }
     for (const n of [...used].sort((a, b) => a - b)) {
       const c = ranked[n - 1];

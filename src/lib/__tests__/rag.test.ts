@@ -27,3 +27,34 @@ test("real questions are not caught by the small-talk filter", async () => {
   // reach retrieval (which throws here), proving the filter passed it through.
   await assert.rejects(answerQuestion(explodingStore, "hey what is the penalty clause?", "doc-1"), /retrieval must not run/);
 });
+
+test("grouped citation markers like [1, 2] produce chips for every number", async () => {
+  const { finalizeAnswer } = await import("../rag");
+  const ranked = [1, 2, 3].map((i) => ({
+    id: `d:${i}`,
+    documentId: "d",
+    page: i,
+    index: i,
+    text: `chunk text ${i}`,
+    score: 0.9,
+  }));
+  const docs = new Map([["d", "doc.pdf"]]);
+  const answer = finalizeAnswer("Rent is Rs 100 [1, 2] and deposit Rs 50 [3].", ranked as never, docs);
+  assert.deepEqual(
+    answer.citations.map((c) => c.page),
+    [1, 2, 3]
+  );
+});
+
+test("out-of-range citation numbers are dropped, not fabricated", async () => {
+  const { finalizeAnswer } = await import("../rag");
+  const ranked = [
+    { id: "d:1", documentId: "d", page: 1, index: 1, text: "only chunk", score: 0.9 },
+  ];
+  const docs = new Map([["d", "doc.pdf"]]);
+  const answer = finalizeAnswer("Claims [1, 9] and [99].", ranked as never, docs);
+  assert.deepEqual(
+    answer.citations.map((c) => c.page),
+    [1]
+  );
+});
