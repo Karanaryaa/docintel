@@ -22,7 +22,13 @@ const NIM_MODEL = process.env.AI_EMBED_MODEL ?? "nvidia/llama-3.2-nv-embedqa-1b-
 const NIM_BASE = process.env.AI_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
 
 function useNim(): boolean {
-  return Boolean(process.env.AI_API_KEY);
+  if (process.env.AI_API_KEY) return true;
+  if (process.env.NODE_ENV === "production") {
+    // Fail closed in production: never fall back to a different embedding
+    // space than the one existing chunks were indexed with.
+    throw new Error("AI_API_KEY is not set");
+  }
+  return false;
 }
 
 async function nimEmbed(texts: string[], inputType: "query" | "passage"): Promise<number[][]> {
