@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { WorkingIndicator } from "./working-indicator";
 import type { ChatAnswer, DocumentMeta } from "@/lib/types";
 
 interface Message extends ChatAnswer {
@@ -101,9 +102,8 @@ export function ChatPanel({ documents, onOpenCitation }: Props) {
             )
           )}
           {loading && (
-            <div className="flex items-center gap-2 text-sm text-ink-faint">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
-              Reading the documents...
+            <div className="text-ink-faint">
+              <WorkingIndicator label="Reading the documents" compact />
             </div>
           )}
           <div ref={bottomRef} />

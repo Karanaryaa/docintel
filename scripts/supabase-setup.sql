@@ -40,3 +40,15 @@ alter table invoices enable row level security;
 insert into storage.buckets (id, name, public)
 values ('documents', 'documents', false)
 on conflict (id) do nothing;
+
+-- demo-grade durable rate limiting counters (server-side, service role only)
+create table if not exists rate_limits (
+  bucket text primary key,
+  window_start timestamptz not null,
+  count integer not null
+);
+alter table rate_limits enable row level security;
+
+-- API access for the server-side service role
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.documents, public.chunks, public.invoices, public.rate_limits to service_role;

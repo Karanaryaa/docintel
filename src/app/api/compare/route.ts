@@ -5,6 +5,7 @@ import { cosine } from "@/lib/chunk";
 import { embedQuery } from "@/lib/embed";
 import { chat } from "@/lib/ai";
 import type { Citation } from "@/lib/types";
+import { rateLimit, clientIp } from "@/lib/ratelimit";
 
 export const maxDuration = 300; // Hobby max with fluid compute (default-enabled)
 
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest) {
   const ids = (body.documentIds ?? []).filter(Boolean);
   if (ids.length < 2) {
     return NextResponse.json({ error: "pick at least two documents" }, { status: 400 });
+  }
+  if (!(await rateLimit(`compare:${clientIp(req)}`, 10, 60_000))) {
+    return NextResponse.json({ error: "rate limit: 10 comparisons per minute" }, { status: 429 });
   }
   const topic = body.topic?.trim() || "the key terms, amounts, dates and obligations";
 

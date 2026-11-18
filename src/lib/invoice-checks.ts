@@ -84,7 +84,7 @@ export function checkInvoice(
       flags.push({
         code: "TAX_MISMATCH",
         severity: "warning",
-        message: `Stated tax rate ${fields.taxRate}% implies ${round2(computedTax)} tax, but the invoice says ${round2(fields.taxAmount)}`,
+        message: `Stated tax rate ${fields.taxRate}% over the line-item total of ${round2(taxBase)} implies ${round2(computedTax)} tax, but the invoice prints ${round2(fields.taxAmount)} (it only matches if computed on the printed subtotal, which disagrees with the line items)`,
         expected: round2(computedTax),
         actual: fields.taxAmount,
       });

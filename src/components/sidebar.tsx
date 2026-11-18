@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { DocumentMeta } from "@/lib/types";
+import { WorkingIndicator } from "./working-indicator";
 
 interface Props {
   documents: DocumentMeta[];
@@ -33,7 +34,11 @@ export function Sidebar({ documents, selectedId, busy, onSelect, onUpload, onDel
           if (e.dataTransfer.files.length) onUpload(e.dataTransfer.files);
         }}
       >
-        <p className="font-medium">{busy ? "Processing..." : "Drop PDFs here"}</p>
+        {busy ? (
+          <WorkingIndicator label="Processing your document" />
+        ) : (
+          <p className="font-medium">Drop PDFs here</p>
+        )}
         <p className="mt-1 text-xs text-ink-faint">text or scanned, up to 25 MB</p>
         <button
           onClick={() => inputRef.current?.click()}

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { randomUUID } from "node:crypto";
 import { getStore } from "@/lib/store";
 import { processDocument } from "@/lib/pipeline";
@@ -13,6 +14,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await rateLimit(`upload:${clientIp(req)}`, 12, 3_600_000))) {
+    return NextResponse.json({ error: "rate limit: 12 uploads per hour" }, { status: 429 });
+  }
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
