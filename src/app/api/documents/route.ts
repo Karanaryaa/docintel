@@ -46,10 +46,16 @@ export async function POST(req: NextRequest) {
 
   const store = getStore();
   await store.putDocument(meta, bytes);
-  // Ingest runs after the response: the upload returns in about a second
-  // and the UI polls the document status/progress until it is ready.
+  // Ingest runs in its own normal request (fired via after): the after()
+  // sandbox itself cannot clone/transfer pdfjs's raster buffers, but a
+  // plain request route can - and gets its own 300s budget.
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL ?? "localhost:3000";
+  const proto = host.startsWith("localhost") ? "http" : "https";
   after(async () => {
-    await processDocument(store, meta);
+    await fetch(`${proto}://${host}/api/documents/${id}/process`, {
+      method: "POST",
+      headers: { "x-internal-token": process.env.AI_API_KEY ?? "" },
+    }).catch(() => {});
   });
   return NextResponse.json({ document: meta }, { status: 201 });
 }
