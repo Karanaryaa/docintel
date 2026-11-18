@@ -6,7 +6,7 @@ import { embedQuery } from "@/lib/embed";
 import { chat } from "@/lib/ai";
 import type { Citation } from "@/lib/types";
 
-export const maxDuration = 300;
+export const maxDuration = 60; // Hobby plan cap
 
 /**
  * Cross-document comparison: retrieves the most relevant excerpts from each

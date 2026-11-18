@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { answerQuestion } from "@/lib/rag";
 
-export const maxDuration = 300;
+export const maxDuration = 60; // Hobby plan cap
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as { question?: string; documentId?: string };

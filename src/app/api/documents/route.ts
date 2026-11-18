@@ -5,7 +5,7 @@ import { getStore } from "@/lib/store";
 import { processDocument } from "@/lib/pipeline";
 import type { DocumentMeta } from "@/lib/types";
 
-export const maxDuration = 300;
+export const maxDuration = 60; // Hobby plan cap
 
 export async function GET() {
   const store = getStore();
