@@ -7,7 +7,7 @@ documents side by side.
 Built with Next.js, NVIDIA NIM models, and Supabase. Deploys on Vercel's free
 Hobby plan.
 
-- Live demo: https://docintel-olive.vercel.app (passcode-gated, ask the team for access)
+- Live demo: https://k-papertrail.vercel.app (open demo link)
 - Repository: https://github.com/Karanaryaa/docintel
 
 ## What it does
@@ -79,17 +79,18 @@ answer accuracy. Change any of them with the env vars below.
 | `AI_EMBED_MODEL` | no | `nvidia/nemotron-3.5-embed-1b` | retrieval embeddings |
 | `SUPABASE_URL` | production | - | e.g. `https://<ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | production | - | service-role key (server only) |
-| `APP_ACCESS_CODE` | demo deploys | unset | shared demo passcode (see below) |
+| `APP_ACCESS_CODE` | no | unset | optional shared passcode gate (off in the demo) |
 
-## Demo access gate
+## Access model
 
-`APP_ACCESS_CODE` gates every page, API route, and page image behind a
-passcode (the cookie stores only the SHA-256 of the code, never the code).
-When unset, the app is open - fine for local development.
+The demo deployment is **open**: anyone with the link shares one document
+space - every visitor sees every uploaded document. That is deliberate for a
+classroom demo, and it is why the synthetic-only rule below matters.
 
-Scope note: this is a **single shared passcode for a college demo**, not
-multi-user isolation. Everyone with the code shares one document space. Do not
-treat it as per-user authentication.
+An optional passcode gate exists for private demos: set `APP_ACCESS_CODE`
+and every page, API route, and page image requires it (the cookie stores
+only the SHA-256 of the code, never the code). It is a single shared
+passcode, not multi-user isolation.
 
 Rate limits are enforced server-side and are durable across serverless
 instances (counters in the `rate_limits` table, not in-memory):
@@ -140,8 +141,8 @@ editor or psql). It creates:
 ## Deploy on Vercel
 
 1. Import the repo into Vercel (Hobby plan works).
-2. Set `AI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and
-   `APP_ACCESS_CODE` as production environment variables.
+2. Set `AI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` as production
+   environment variables (plus `APP_ACCESS_CODE` if you want the gate).
 3. Deploy. API routes export `maxDuration = 300` (Hobby maximum with fluid
    compute), which covers vision OCR of large scanned pages.
 
@@ -149,8 +150,9 @@ Hobby plan gotchas:
 
 - Git-triggered deploys require every commit author to have Vercel access to
   the project, and Hobby teams can't add members for private repos. If a
-  teammate's push gets blocked, redeploy from the dashboard or CLI as the
-  project owner.
+  teammate's push gets blocked, deploy from the CLI as the project owner
+  (`vercel deploy --prod`) - note the CLI attaches git metadata, so deploy
+  from a copy without `.git` if the author rule still bites.
 - No SLA; cold starts happen on the first request after idle.
 
 ## Tests and evaluation
