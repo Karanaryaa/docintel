@@ -6,7 +6,7 @@ import { embedQuery } from "@/lib/embed";
 import { chat } from "@/lib/ai";
 import type { Citation } from "@/lib/types";
 
-export const maxDuration = 60; // Hobby plan cap
+export const maxDuration = 300; // Hobby max with fluid compute (default-enabled)
 
 /**
  * Cross-document comparison: retrieves the most relevant excerpts from each

@@ -100,12 +100,7 @@ export function App() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-card px-4 py-3 md:px-6">
-        <div className="flex items-baseline gap-3">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">Papertrail</h1>
-          <span className="text-xs uppercase tracking-[0.2em] text-ink-faint">
-            AI Document Intelligence
-          </span>
-        </div>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">Papertrail</h1>
         <nav className="flex gap-1 rounded-full border border-line bg-paper p-1 text-sm">
           {(
             [
