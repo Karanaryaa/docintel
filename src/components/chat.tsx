@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WorkingIndicator } from "./working-indicator";
 import type { ChatAnswer, DocumentMeta } from "@/lib/types";
 
