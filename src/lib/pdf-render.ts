@@ -1,4 +1,36 @@
 /**
+ * unpdf runs pdfjs with an in-process fake worker whose messages pass through
+ * structuredClone(msg, { transfer }). Raster image buffers (pooled Node
+ * Buffers, WASM memory, napi-rs native memory) cannot always be detached, and
+ * then Node throws DataCloneError "Cannot transfer object of unsupported
+ * type". This only ever transfers image data, which is why text/vector PDFs
+ * never hit it. A failed transfer detaches nothing, so falling back to a
+ * plain copy is safe; pdfjs reads globalThis.structuredClone on every send.
+ */
+const nativeClone = globalThis.structuredClone;
+if (nativeClone && !(nativeClone as unknown as Record<string, unknown>).__pdfSafe) {
+  const safe = ((value: unknown, opts?: StructuredSerializeOptions) => {
+    try {
+      return nativeClone(value, opts);
+    } catch (err) {
+      if (opts?.transfer?.length && (err as DOMException)?.name === "DataCloneError") {
+        return nativeClone(value); // copy instead of transfer
+      }
+      throw err;
+    }
+  }) as typeof structuredClone;
+  (safe as unknown as Record<string, unknown>).__pdfSafe = true;
+  globalThis.structuredClone = safe;
+}
+
+/** Shared pdfjs document options: force the plain-data path (no bitmaps). */
+const DOC_OPTS = {
+  isOffscreenCanvasSupported: false,
+  isImageDecoderSupported: false,
+  useWasm: true,
+} as const;
+
+/**
  * Server-side PDF page rendering (unpdf + napi-rs canvas), shared by the
  * page-image route and the ingest pipeline's vision-OCR path.
  *
@@ -18,7 +50,7 @@ export async function renderPageToPng(bytes: Uint8Array, page: number): Promise<
   const slot = Symbol.for("unpdf.canvasModule");
   if (!g[slot]) g[slot] = canvasPkg;
 
-  const pdf = await getDocumentProxy(bytes);
+  const pdf = await getDocumentProxy(bytes, DOC_OPTS);
   const pageNum = Math.min(Math.max(1, page), pdf.numPages);
   const pg = await pdf.getPage(pageNum);
   const viewport = pg.getViewport({ scale: 2 });
@@ -48,7 +80,7 @@ export async function renderPageToDataUrl(bytes: Uint8Array, page: number): Prom
 export async function extractEmbeddedPagePng(bytes: Uint8Array, page: number): Promise<Uint8Array | null> {
   const { extractImages } = await import("unpdf");
   const canvasPkg = await import("@napi-rs/canvas");
-  const images = await extractImages(bytes, page);
+  const images = await extractImages(new Uint8Array(bytes), page);
   const img = images.reduce<(typeof images)[number] | null>(
     (best, cur) => (cur.width * cur.height > (best?.width ?? 0) * (best?.height ?? 0) ? cur : best),
     null
