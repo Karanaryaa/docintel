@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
-import { answerQuestion } from "@/lib/rag";
+import { answerQuestion, answerQuestionEvents } from "@/lib/rag";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 
 export const maxDuration = 300; // Hobby max with fluid compute (default-enabled)
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as { question?: string; documentId?: string };
+  const body = (await req.json()) as { question?: string; documentId?: string; stream?: boolean };
   const question = body.question?.trim();
   if (!question) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
@@ -24,6 +24,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "documentId is required" }, { status: 400 });
   }
   try {
+    if (body.stream) {
+      // NDJSON stream: {"type":"delta","text":...} lines as the model
+      // generates, then one {"type":"final","answer":...} with citations.
+      const events = answerQuestionEvents(getStore(), question, body.documentId);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          const { done, value } = await events.next();
+          if (done) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(encoder.encode(JSON.stringify(value) + "\n"));
+        },
+        async cancel() {
+          await events.return(undefined);
+        },
+      });
+      return new Response(stream, {
+        headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
     const answer = await answerQuestion(getStore(), question, body.documentId);
     return NextResponse.json(answer);
   } catch (err) {

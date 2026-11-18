@@ -43,6 +43,34 @@ export function chat(messages: ChatMessage[], opts?: Parameters<typeof aiChat>[1
   return aiChat(messages, opts);
 }
 
+/**
+ * Streaming chat completion: returns the raw SSE body so callers can forward
+ * tokens as they arrive instead of waiting for the full answer.
+ */
+export async function chatStream(messages: ChatMessage[], opts: { model?: string; maxTokens?: number; temperature?: number; timeoutMs?: number } = {}): Promise<ReadableStream<Uint8Array>> {
+  const res = await fetch(`${AI_BASE}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),
+    headers: {
+      Authorization: `Bearer ${aiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: opts.model ?? CHAT_MODEL,
+      messages,
+      temperature: opts.temperature ?? 0.1,
+      max_tokens: opts.maxTokens ?? 1024,
+      stream: true,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`AI provider ${res.status}: ${body.slice(0, 500)}`);
+  }
+  if (!res.body) throw new Error("AI provider returned no stream");
+  return res.body;
+}
+
 /** Chat completion constrained to a JSON object response; parses and returns it. */
 export async function chatJson<T>(messages: ChatMessage[], opts?: Parameters<typeof aiChat>[1]): Promise<T> {
   const raw = await aiChat(messages, { ...opts, json: true });

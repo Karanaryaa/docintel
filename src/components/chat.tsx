@@ -100,51 +100,122 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
     // spinning forever when the AI provider is slow.
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), 120_000);
+    let reply: Message | null = null;
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, documentId: askedScope }),
+        body: JSON.stringify({ question, documentId: askedScope, stream: true }),
       });
-      const json = (await res.json()) as ChatAnswer & { error?: string };
-      const reply: Message = {
-        role: "assistant",
-        answer: json.error ?? json.answer,
-        citations: json.citations ?? [],
-        insufficientEvidence: json.insufficientEvidence ?? false,
-      };
-      // If the user switched files while the answer was generating, file the
-      // answer under the document it was asked about, not the one now showing.
-      if (scopeRef.current !== askedScope) {
-        try {
-          const raw = localStorage.getItem(storageKey(askedScope));
-          const arr = raw ? (JSON.parse(raw) as Message[]) : [];
-          localStorage.setItem(storageKey(askedScope), JSON.stringify([...arr, reply]));
-        } catch {
-          // storage unavailable - the answer is lost, the chat stays consistent
-        }
+      if (!res.ok || !res.body) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        reply = {
+          role: "assistant",
+          answer: json?.error ?? "The AI service could not answer right now. Please try again.",
+          citations: [],
+          insufficientEvidence: false,
+        };
       } else {
-        setMessages((m) => [...m, reply]);
+        // Stream tokens into a live bubble so first words appear in seconds.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let accumulated = "";
+        let bubbleStarted = false;
+        const patchLast = (patch: Partial<Message>) =>
+          setMessages((m) => {
+            const copy = [...m];
+            copy[copy.length - 1] = { ...copy[copy.length - 1], ...patch };
+            return copy;
+          });
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const ev = JSON.parse(line) as
+              | { type: "delta"; text: string }
+              | { type: "final"; answer: ChatAnswer };
+            if (ev.type === "delta") {
+              accumulated += ev.text;
+              if (scopeRef.current === askedScope) {
+                if (!bubbleStarted) {
+                  bubbleStarted = true;
+                  setLoading(false);
+                  setMessages((m) => [...m, { role: "assistant", answer: accumulated, citations: [], insufficientEvidence: false }]);
+                } else {
+                  patchLast({ answer: accumulated });
+                }
+              }
+            } else {
+              reply = {
+                role: "assistant",
+                answer: ev.answer.answer,
+                citations: ev.answer.citations ?? [],
+                insufficientEvidence: ev.answer.insufficientEvidence ?? false,
+              };
+              if (scopeRef.current === askedScope) {
+                if (!bubbleStarted) {
+                  bubbleStarted = true;
+                  setMessages((m) => [...m, reply!]);
+                } else {
+                  patchLast({ answer: reply.answer, citations: reply.citations, insufficientEvidence: reply.insufficientEvidence });
+                }
+              }
+            }
+          }
+        }
+        if (!reply) {
+          reply = {
+            role: "assistant",
+            answer: accumulated || "The AI service did not finish its answer. Please try again.",
+            citations: [],
+            insufficientEvidence: false,
+          };
+        }
       }
     } catch (err) {
       const timedOut = err instanceof DOMException && err.name === "AbortError";
-      if (scopeRef.current === askedScope) {
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            answer: timedOut
-              ? "The AI service took too long to respond (over 2 minutes). Please try again."
-              : "Something went wrong reaching the server.",
-            citations: [],
-            insufficientEvidence: false,
-          },
-        ]);
-      }
+      reply = {
+        role: "assistant",
+        answer: timedOut
+          ? "The AI service took too long to respond (over 2 minutes). Please try again."
+          : "Something went wrong reaching the server.",
+        citations: [],
+        insufficientEvidence: false,
+      };
     } finally {
       clearTimeout(abortTimer);
       setLoading(false);
+      if (reply) {
+        const finalReply = reply;
+        // If the user switched files while the answer was generating, file the
+        // answer under the document it was asked about, not the one now showing.
+        if (scopeRef.current !== askedScope) {
+          try {
+            const raw = localStorage.getItem(storageKey(askedScope));
+            const arr = raw ? (JSON.parse(raw) as Message[]) : [];
+            // The user message was saved by the storage effect before the switch.
+            localStorage.setItem(storageKey(askedScope), JSON.stringify([...arr, finalReply]));
+          } catch {
+            // storage unavailable - the answer is lost, the chat stays consistent
+          }
+        } else {
+          setMessages((m) => {
+            const last = m[m.length - 1];
+            if (last && last.role === "assistant") {
+              const copy = [...m];
+              copy[copy.length - 1] = finalReply;
+              return copy;
+            }
+            return [...m, finalReply];
+          });
+        }
+      }
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
   }
