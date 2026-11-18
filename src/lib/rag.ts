@@ -214,6 +214,8 @@ export async function* answerQuestionEvents(
   const decoder = new TextDecoder();
   let buffer = "";
   let raw = "";
+  let sawDone = false;
+  let truncated = false;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -224,22 +226,34 @@ export async function* answerQuestionEvents(
       const t = line.trim();
       if (!t.startsWith("data:")) continue;
       const payload = t.slice(5).trim();
-      if (payload === "[DONE]") continue;
+      if (payload === "[DONE]") {
+        sawDone = true;
+        continue;
+      }
       try {
-        const piece = (JSON.parse(payload) as { choices?: Array<{ delta?: { content?: string } }> })
-          .choices?.[0]?.delta?.content;
+        const parsed = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+        };
+        const piece = parsed.choices?.[0]?.delta?.content;
         if (piece) {
           raw += piece;
           yield { type: "delta", text: piece };
         }
+        if (parsed.choices?.[0]?.finish_reason === "length") truncated = true;
       } catch {
         // partial JSON across chunks is handled via the line buffer; skip junk
       }
     }
   }
 
+  // A generation cut off by the token cap must say so, not read as complete.
+  if (truncated) {
+    raw += "\n\n*(This answer hit the length limit - ask a follow-up for the rest.)*";
+  }
   const answer = finalizeAnswer(raw, ranked, docs);
-  if (documentId) {
+  // Only cache answers the provider finished cleanly (saw [DONE]); a stream
+  // that died mid-generation never enters the cache.
+  if (documentId && sawDone) {
     await setCachedAnswer(documentId, question, answer).catch(() => {});
   }
   yield { type: "final", answer };

@@ -12,8 +12,12 @@ function enabled(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
 }
 
+// Bump when the prompt, model or citation format changes so older cached
+// answers are never served against a new answering contract.
+const CACHE_VERSION = "v1";
+
 export function normalizeQuestion(q: string): string {
-  return q.trim().toLowerCase().replace(/\s+/g, " ");
+  return `${CACHE_VERSION}:${q.trim().toLowerCase().replace(/\s+/g, " ")}`;
 }
 
 interface CacheRow {

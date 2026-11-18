@@ -4,6 +4,6 @@ import { normalizeQuestion } from "../answer-cache";
 
 test("cache keys ignore case, surrounding whitespace and repeated spaces", () => {
   assert.equal(normalizeQuestion("  Whats in Unit 3?  "), normalizeQuestion("whats in unit 3?"));
-  assert.equal(normalizeQuestion("whats  in   unit 3?"), "whats in unit 3?");
+  assert.equal(normalizeQuestion("whats  in   unit 3?"), "v1:whats in unit 3?");
   assert.notEqual(normalizeQuestion("whats in unit 3"), normalizeQuestion("whats in unit 4"));
 });
