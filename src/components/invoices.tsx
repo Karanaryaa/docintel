@@ -5,6 +5,9 @@ import type { InvoiceFlag } from "@/lib/types";
 
 interface Props {
   invoices: InvoiceWithName[];
+  pending: Array<{ id: string; name: string }>;
+  retrying: boolean;
+  onRetry: () => void;
   onOpenDocument: (id: string) => void;
 }
 
@@ -14,8 +17,36 @@ function money(n: number | null, currency: string | null): string {
   return `${prefix}${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-export function InvoicesPanel({ invoices, onOpenDocument }: Props) {
+export function InvoicesPanel({ invoices, pending, retrying, onRetry, onOpenDocument }: Props) {
   if (invoices.length === 0) {
+    if (pending.length > 0) {
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <div className="max-w-md text-center">
+            <h2 className="font-display text-3xl font-semibold">Extraction pending</h2>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+              {pending.length === 1 ? "1 invoice is" : `${pending.length} invoices are`} uploaded and processed,
+              but field extraction has not run yet - it needs the AI key to be configured.
+            </p>
+            <ul className="mt-4 space-y-1.5 text-sm">
+              {pending.map((d) => (
+                <li key={d.id} className="rounded-lg border border-line bg-card px-3 py-2 text-left">
+                  {d.name}
+                  <span className="ml-2 text-xs text-ink-faint">waiting for extraction</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={onRetry}
+              disabled={retrying}
+              className="mt-5 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper transition hover:opacity-90 disabled:opacity-50"
+            >
+              {retrying ? "Extracting…" : "Retry extraction"}
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="max-w-md text-center">

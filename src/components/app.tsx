@@ -34,6 +34,17 @@ export function App() {
   }, []);
   const [viewerPage, setViewerPage] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [retryingInvoices, setRetryingInvoices] = useState(false);
+
+  const retryInvoices = useCallback(async () => {
+    setRetryingInvoices(true);
+    try {
+      await fetch("/api/invoices", { method: "POST" });
+    } finally {
+      await refresh();
+      setRetryingInvoices(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const [d, i] = await Promise.all([
@@ -134,7 +145,15 @@ export function App() {
             <ChatPanel documents={documents} onOpenCitation={openCitation} />
           )}
           {tab === "invoices" && (
-            <InvoicesPanel invoices={invoices} onOpenDocument={(id) => setSelectedId(id)} />
+            <InvoicesPanel
+              invoices={invoices}
+              pending={documents
+                .filter((d) => d.kind === "invoice" && d.status === "ready" && !invoices.some((r) => r.documentId === d.id))
+                .map((d) => ({ id: d.id, name: d.name }))}
+              retrying={retryingInvoices}
+              onRetry={retryInvoices}
+              onOpenDocument={(id) => setSelectedId(id)}
+            />
           )}
           {tab === "compare" && <ComparePanel documents={documents} onOpenCitation={openCitation} />}
         </main>
