@@ -58,3 +58,23 @@ test("out-of-range citation numbers are dropped, not fabricated", async () => {
     [1]
   );
 });
+
+test("lexical fallback uses whole words: 'main' does not match 'remains'", async () => {
+  const { rankLexical } = await import("../rag");
+  const ranked = rankLexical(
+    [{ text: "It remains to be seen; mainly speculative, domain remains." }],
+    "what is the main idea"
+  );
+  assert.equal(ranked.length, 0);
+});
+
+test("lexical fallback demotes table-of-contents pages below prose", async () => {
+  const { rankLexical } = await import("../rag");
+  const toc = {
+    text: "Table Of Contents CHAPTER 1: INTRODUCTION.16 CHAPTER 2: DESIRE.29 CHAPTER 3: FAITH.47 CHAPTER 4: AUTO-SUGGESTION.66 CHAPTER 5: SPECIALIZED KNOWLEDGE.73 CHAPTER 6: IMAGINATION.86",
+  };
+  const prose = { text: "The first chapter tells of a man who stopped digging three feet from gold." };
+  const ranked = rankLexical([toc, prose], "what is the main idea of the first chapter");
+  assert.equal(ranked[0].text, prose.text);
+  assert.ok(ranked[0].score > ranked[1].score);
+});

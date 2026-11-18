@@ -53,17 +53,48 @@ async function retrieve(store: Store, question: string, documentId?: string): Pr
   }
   // Embedding provider unreachable: degrade to lexical overlap so the
   // question still gets a grounded, cited answer instead of hanging.
-  const terms = question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
-  const ranked = all
-    .filter((c) => !documentId || c.documentId === documentId)
+  const ranked = rankLexical(
+    all.filter((c) => !documentId || c.documentId === documentId),
+    question
+  );
+  return { ranked: ranked.slice(0, TOP_K), lexical: true };
+}
+
+
+const TOC_ENTRY = /[A-Za-z)][.:]\d{1,4}(?=\s|$)/g;
+
+/** True for table-of-contents pages: dense "Title.12" entries, little prose. */
+export function looksLikeToc(text: string): boolean {
+  if (text.toLowerCase().includes("table of contents")) return true;
+  return (text.match(TOC_ENTRY) ?? []).length >= 6;
+}
+
+/**
+ * Term-overlap ranking used only when the embedding provider is down.
+ * Whole-word matching keeps "main" from matching "remains", and TOC pages
+ * are demoted because they mention every chapter title without the prose
+ * a question is actually about.
+ */
+export function rankLexical<T extends { text: string }>(
+  chunks: T[],
+  question: string
+): Array<T & { score: number }> {
+  const terms = [
+    ...new Set(question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)),
+  ];
+  if (terms.length === 0) return [];
+  const words = terms.map(
+    (t) => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
+  );
+  return chunks
     .map((c) => {
-      const text = c.text.toLowerCase();
-      const hits = terms.filter((t) => text.includes(t)).length;
-      return { ...c, score: terms.length ? hits / terms.length : 0 };
+      const hits = words.filter((w) => w.test(c.text)).length;
+      let score = hits / terms.length;
+      if (looksLikeToc(c.text)) score *= 0.2;
+      return { ...c, score };
     })
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score);
-  return { ranked: ranked.slice(0, TOP_K), lexical: true };
 }
 
 /**
