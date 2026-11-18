@@ -29,11 +29,26 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
       let cursor = 0;
       await say(`Reading scanned pages 0/${ocrPages.length}`);
       const worker = async () => {
+        const describe = (err: unknown) => {
+          const e = err instanceof Error ? err : new Error(String(err));
+          const frame = e.stack?.split("\n").find((l) => l.includes("at "))?.trim().slice(0, 120) ?? "";
+          return `${e.message.slice(0, 150)} [${frame}]`;
+        };
         while (cursor < ocrPages.length) {
           const p = ocrPages[cursor++];
           try {
-            const dataUrl = await renderPageToDataUrl(bytes, p);
-            const text = await ocrPageImage(dataUrl);
+            let dataUrl: string;
+            try {
+              dataUrl = await renderPageToDataUrl(bytes, p);
+            } catch (err) {
+              throw new Error(`render p${p}: ${describe(err)}`);
+            }
+            let text: string;
+            try {
+              text = await ocrPageImage(dataUrl);
+            } catch (err) {
+              throw new Error(`ocr p${p}: ${describe(err)}`);
+            }
             const idx = finalPages.findIndex((fp) => fp.page === p);
             if (idx >= 0 && text.trim()) {
               finalPages[idx] = { page: p, text };
@@ -42,7 +57,7 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
           } catch (err) {
             // keep the (thin) native text if OCR fails for a page, but
             // record the first failure so it is visible on the document
-            ocrError ??= err instanceof Error ? err.message.slice(0, 200) : "OCR failed";
+            ocrError ??= err instanceof Error ? err.message.slice(0, 280) : "OCR failed";
           }
           finished++;
           await say(`Reading scanned pages ${finished}/${ocrPages.length}`);
@@ -54,6 +69,20 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
     }
 
     await say("Indexing for search");
+    // Never mark a document ready when nothing readable came out of it -
+    // that would let chats answer from an empty index without any sign.
+    const usableChars = finalPages.reduce((n, p) => n + p.text.replace(/\s+/g, "").length, 0);
+    if (usableChars < 40) {
+      await store.updateDocument(doc.id, {
+        status: "error",
+        progress: null,
+        pageCount,
+        error:
+          "No readable text could be extracted from this PDF" +
+          (ocrError ? ` - scan OCR failed: ${ocrError.slice(0, 180)}` : ". It may be empty."),
+      });
+      return;
+    }
     const chunkCount = await indexDocument(store, doc, finalPages);
     const allText = finalPages.map((p) => p.text).join("\n\n");
     const isInvoice = looksLikeInvoice(allText);
