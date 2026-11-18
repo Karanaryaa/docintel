@@ -19,6 +19,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [scope, setScope] = useState<string>("");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Clicking a document in the sidebar scopes the chat to it, so a question
   // asked right after selecting a doc is about that doc. Still user-overridable.
@@ -27,6 +28,52 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
   }, [selectedId]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Chats are saved per document scope in this browser only (no login, so
+  // nothing is shared with other visitors) and survive reloads.
+  const storageKey = (s: string) => `pt-chat:${s || "all"}`;
+  const hydratedScope = useRef<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey(scope));
+      setMessages(raw ? (JSON.parse(raw) as Message[]) : []);
+    } catch {
+      setMessages([]);
+    }
+    hydratedScope.current = scope;
+    setConfirmClear(false);
+  }, [scope]);
+
+  useEffect(() => {
+    if (hydratedScope.current !== scope) return;
+    try {
+      localStorage.setItem(storageKey(scope), JSON.stringify(messages));
+    } catch {
+      // storage full or unavailable - chat still works for the session
+    }
+  }, [messages, scope]);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
+
+  // Deletes only the chat for the current scope - never the source PDF.
+  function clearChat() {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    try {
+      localStorage.removeItem(storageKey(scope));
+    } catch {
+      // ignore
+    }
+    setMessages([]);
+    setConfirmClear(false);
+  }
 
   const ready = documents.filter((d) => d.status === "ready");
 
@@ -139,6 +186,20 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
             placeholder="What do the documents say about..."
             className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-4 py-2 text-sm outline-none placeholder:text-ink-faint focus:border-accent"
           />
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              aria-label="Delete this chat (keeps the PDF)"
+              title="Delete this chat (keeps the PDF)"
+              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                confirmClear
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "border-line bg-paper text-ink-faint hover:text-ink"
+              }`}
+            >
+              {confirmClear ? "Sure?" : "Clear"}
+            </button>
+          )}
           <button
             onClick={ask}
             disabled={loading || !input.trim() || ready.length === 0}
