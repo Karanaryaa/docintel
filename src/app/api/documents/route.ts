@@ -9,7 +9,24 @@ export const maxDuration = 300; // Hobby max with fluid compute (default-enabled
 
 export async function GET() {
   const store = getStore();
-  return NextResponse.json({ documents: await store.listDocuments() });
+  const docs = await store.listDocuments();
+  // Sweep stuck ingests: a processing doc older than the ingest budget
+  // (300s function limit + slack) will never finish on its own - mark it
+  // honestly so the UI shows a failed state instead of spinning forever.
+  const STALE_MS = 6 * 60_000;
+  const now = Date.now();
+  await Promise.all(
+    docs.map(async (d) => {
+      if ((d.status === "processing" || d.status === "uploaded") && now - Date.parse(d.createdAt) > STALE_MS) {
+        const error = "Processing timed out before it finished. Delete and re-upload to try again.";
+        await store.updateDocument(d.id, { status: "error", progress: null, error }).catch(() => {});
+        d.status = "error";
+        d.progress = undefined;
+        d.error = error;
+      }
+    })
+  );
+  return NextResponse.json({ documents: docs });
 }
 
 export async function POST(req: NextRequest) {

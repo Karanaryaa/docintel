@@ -67,6 +67,23 @@ export class SupabaseStore implements Store {
     await rest(`documents?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(patch) });
   }
 
+  async claimDocument(id: string): Promise<boolean> {
+    // Claimable: not ready, and either not processing or processing that
+    // went stale (its uploader died mid-run). The conditional UPDATE is the
+    // atomic claim: two concurrent claimants cannot both match.
+    const staleBefore = new Date(Date.now() - 6 * 60_000).toISOString();
+    const filter = `or=(status=in.(uploaded,error),and(status=eq.processing,createdAt=lt.${staleBefore}))`;
+    const rows = await rest<Array<{ id: string }>>(
+      `documents?id=eq.${id}&${filter}`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ status: "processing", progress: "Queued" }),
+      }
+    );
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
   async putChunks(chunks: Chunk[]): Promise<void> {
     if (chunks.length === 0) return;
     const docId = chunks[0].documentId;
