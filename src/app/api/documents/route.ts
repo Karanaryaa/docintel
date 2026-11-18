@@ -3,7 +3,6 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import { randomUUID } from "node:crypto";
 import { getStore } from "@/lib/store";
-import { processDocument } from "@/lib/pipeline";
 import type { DocumentMeta } from "@/lib/types";
 
 export const maxDuration = 300; // Hobby max with fluid compute (default-enabled)
