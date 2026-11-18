@@ -33,8 +33,8 @@ interface RankedChunk extends Chunk {
 }
 
 async function retrieve(store: Store, question: string, documentId?: string): Promise<RankedChunk[]> {
-  const q = await embedQuery(question);
-  const all = await store.allChunks();
+  // Embed and fetch in parallel; the fetch is filtered server-side by document.
+  const [q, all] = await Promise.all([embedQuery(question), store.allChunks(documentId)]);
   const ranked = all
     .filter((c) => c.embedding && (!documentId || c.documentId === documentId))
     .map((c) => ({ ...c, score: cosine(q, c.embedding!) }))
@@ -70,8 +70,8 @@ async function retrieveWithFallback(
     // embed closely to any specific chunk. Fall back to the start of that
     // document so the model can describe it. The model still refuses when
     // the question genuinely isn't covered - only the context changes.
-    const head = (await store.allChunks())
-      .filter((c) => c.documentId === documentId && c.embedding)
+    const head = (await store.allChunks(documentId))
+      .filter((c) => c.embedding)
       .sort((a, b) => a.index - b.index)
       .slice(0, 4)
       .map((c) => ({ ...c, score: 1 }));
@@ -107,6 +107,10 @@ export async function answerQuestion(
   if (question.length <= 30 && SMALL_TALK.test(question.trim())) {
     return smallTalkAnswer();
   }
+  if (documentId) {
+    const hit = await getCachedAnswer(documentId, question).catch(() => null);
+    if (hit) return hit;
+  }
   const ranked = await retrieveWithFallback(store, question, documentId);
   if (ranked.length === 0 || ranked[0].score < MIN_SCORE) {
     return {
@@ -119,8 +123,10 @@ export async function answerQuestion(
   const docs = await docNames(store, ranked);
   const context = buildContext(ranked, docs);
   const messages = buildMessages(context, question);
-  const raw = await chat(messages);
-  return finalizeAnswer(raw, ranked, docs);
+  const raw = await chat(messages, { maxTokens: 1024 });
+  const answer = finalizeAnswer(raw, ranked, docs);
+  if (documentId) await setCachedAnswer(documentId, question, answer).catch(() => {});
+  return answer;
 }
 
 function buildMessages(context: string, question: string) {
@@ -210,7 +216,7 @@ export async function* answerQuestionEvents(
   const docs = await docNames(store, ranked);
   const context = buildContext(ranked, docs);
   yield { type: "stage", text: `Found ${ranked.length} relevant passages - asking the AI` };
-  const stream = await chatStream(buildMessages(context, question));
+  const stream = await chatStream(buildMessages(context, question), { maxTokens: 1024 });
 
   // Parse the OpenAI-style SSE stream and forward content deltas.
   const reader = stream.getReader();

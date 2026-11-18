@@ -106,7 +106,7 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
     await store.updateDocument(doc.id, {
       status: "ready",
       pageCount,
-      ocrPages: ocrDone,
+      ocrPages: [...ocrDone].sort((a, b) => a - b),
       kind: isInvoice ? "invoice" : "document",
       progress: null,
       ...(invoiceError ? { error: `invoice extraction: ${invoiceError}` } : {}),

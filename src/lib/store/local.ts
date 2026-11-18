@@ -60,8 +60,9 @@ export class LocalStore implements Store {
     await writeJson("chunks.json", kept.concat(chunks));
   }
 
-  async allChunks(): Promise<Chunk[]> {
-    return readJson<Chunk[]>("chunks.json", []);
+  async allChunks(documentId?: string): Promise<Chunk[]> {
+    const all = await readJson<Chunk[]>("chunks.json", []);
+    return documentId ? all.filter((c) => c.documentId === documentId) : all;
   }
 
   async putInvoice(record: InvoiceRecord): Promise<void> {

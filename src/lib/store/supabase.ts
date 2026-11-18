@@ -104,8 +104,10 @@ export class SupabaseStore implements Store {
     }
   }
 
-  async allChunks(): Promise<Chunk[]> {
-    return rest<Chunk[]>("chunks?select=*");
+  async allChunks(documentId?: string): Promise<Chunk[]> {
+    // Filter server-side: pulling every chunk of every document (with full
+    // embedding vectors) took 7-8s per question before this.
+    return rest<Chunk[]>(`chunks?select=*${documentId ? `&documentId=eq.${documentId}` : ""}`);
   }
 
   async putInvoice(record: InvoiceRecord): Promise<void> {

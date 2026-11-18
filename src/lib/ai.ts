@@ -6,7 +6,10 @@ export function aiKey(): string {
   return key;
 }
 
-export const CHAT_MODEL = process.env.AI_CHAT_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b";
+// bolt-e4b measured 0.3-1.3s with identical citation-grounded answers on the
+// project's benchmark set, vs 1.3-4.4s warm (103s under queue spikes) for the
+// 550B model on the same NVIDIA trial key. Override via AI_CHAT_MODEL.
+export const CHAT_MODEL = process.env.AI_CHAT_MODEL ?? "nvidia/nemotron-3.5-bolt-e4b";
 export const VISION_MODEL = process.env.AI_VISION_MODEL ?? "nvidia/nemotron-3.5-super-vl-120b-a12b";
 
 interface ChatMessage {

@@ -14,7 +14,7 @@ export interface Store {
    */
   claimDocument?(id: string): Promise<boolean>;
   putChunks(chunks: Chunk[]): Promise<void>;
-  allChunks(): Promise<Chunk[]>;
+  allChunks(documentId?: string): Promise<Chunk[]>;
   putInvoice(record: InvoiceRecord): Promise<void>;
   listInvoices(): Promise<InvoiceRecord[]>;
   deleteDocument(id: string): Promise<void>;
