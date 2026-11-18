@@ -34,10 +34,28 @@ interface RankedChunk extends Chunk {
 
 async function retrieve(store: Store, question: string, documentId?: string): Promise<RankedChunk[]> {
   // Embed and fetch in parallel; the fetch is filtered server-side by document.
-  const [q, all] = await Promise.all([embedQuery(question), store.allChunks(documentId)]);
+  const [q, all] = await Promise.all([
+    embedQuery(question).catch(() => null),
+    store.allChunks(documentId),
+  ]);
+  if (q) {
+    const ranked = all
+      .filter((c) => c.embedding && (!documentId || c.documentId === documentId))
+      .map((c) => ({ ...c, score: cosine(q, c.embedding!) }))
+      .sort((a, b) => b.score - a.score);
+    return ranked.slice(0, TOP_K);
+  }
+  // Embedding provider unreachable: degrade to lexical overlap so the
+  // question still gets a grounded, cited answer instead of hanging.
+  const terms = question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
   const ranked = all
-    .filter((c) => c.embedding && (!documentId || c.documentId === documentId))
-    .map((c) => ({ ...c, score: cosine(q, c.embedding!) }))
+    .filter((c) => !documentId || c.documentId === documentId)
+    .map((c) => {
+      const text = c.text.toLowerCase();
+      const hits = terms.filter((t) => text.includes(t)).length;
+      return { ...c, score: terms.length ? hits / terms.length : 0 };
+    })
+    .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score);
   return ranked.slice(0, TOP_K);
 }
