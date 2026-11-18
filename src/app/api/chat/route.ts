@@ -18,6 +18,11 @@ export async function POST(req: NextRequest) {
   if (!(await rateLimit(`chat:${clientIp(req)}`, 20, 60_000))) {
     return NextResponse.json({ error: "rate limit: 20 questions per minute" }, { status: 429 });
   }
+  // Chat is always scoped to one document: answers and saved chats are
+  // per file, so the API requires the file to answer from.
+  if (!body.documentId) {
+    return NextResponse.json({ error: "documentId is required" }, { status: 400 });
+  }
   const answer = await answerQuestion(getStore(), question, body.documentId);
   return NextResponse.json(answer);
 }

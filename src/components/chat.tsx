@@ -21,17 +21,29 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
   const [scope, setScope] = useState<string>("");
   const [confirmClear, setConfirmClear] = useState(false);
 
-  // Clicking a document in the sidebar scopes the chat to it, so a question
-  // asked right after selecting a doc is about that doc. Still user-overridable.
+  // Chat is always scoped to one document: clicking a file in the sidebar
+  // switches the chat to that file, and answers come only from that file.
+  // Each file keeps its own saved chat.
   useEffect(() => {
     if (selectedId) setScope(selectedId);
   }, [selectedId]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scopeRef = useRef(scope);
+  useEffect(() => {
+    scopeRef.current = scope;
+  }, [scope]);
 
-  // Chats are saved per document scope in this browser only (no login, so
+  const ready = documents.filter((d) => d.status === "ready");
+
+  // If the scoped document was deleted, drop back to no selection.
+  useEffect(() => {
+    if (scope && !ready.some((d) => d.id === scope)) setScope("");
+  }, [ready, scope]);
+
+  // Chats are saved per document in this browser only (no login, so
   // nothing is shared with other visitors) and survive reloads.
-  const storageKey = (s: string) => `pt-chat:${s || "all"}`;
+  const storageKey = (s: string) => `pt-chat:${s}`;
   const hydratedScope = useRef<string | null>(null);
 
   useEffect(() => {
@@ -75,11 +87,10 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
     setConfirmClear(false);
   }
 
-  const ready = documents.filter((d) => d.status === "ready");
-
   async function ask() {
     const question = input.trim();
-    if (!question || loading) return;
+    if (!question || loading || !scope) return;
+    const askedScope = scope;
     setInput("");
     setLoading(true);
     setMessages((m) => [...m, { role: "user", question, answer: "", citations: [], insufficientEvidence: false }]);
@@ -87,23 +98,35 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, documentId: scope || undefined }),
+        body: JSON.stringify({ question, documentId: askedScope }),
       });
       const json = (await res.json()) as ChatAnswer & { error?: string };
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          answer: json.error ?? json.answer,
-          citations: json.citations ?? [],
-          insufficientEvidence: json.insufficientEvidence ?? false,
-        },
-      ]);
+      const reply: Message = {
+        role: "assistant",
+        answer: json.error ?? json.answer,
+        citations: json.citations ?? [],
+        insufficientEvidence: json.insufficientEvidence ?? false,
+      };
+      // If the user switched files while the answer was generating, file the
+      // answer under the document it was asked about, not the one now showing.
+      if (scopeRef.current !== askedScope) {
+        try {
+          const raw = localStorage.getItem(storageKey(askedScope));
+          const arr = raw ? (JSON.parse(raw) as Message[]) : [];
+          localStorage.setItem(storageKey(askedScope), JSON.stringify([...arr, reply]));
+        } catch {
+          // storage unavailable - the answer is lost, the chat stays consistent
+        }
+      } else {
+        setMessages((m) => [...m, reply]);
+      }
     } catch {
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", answer: "Something went wrong reaching the server.", citations: [], insufficientEvidence: false },
-      ]);
+      if (scopeRef.current === askedScope) {
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", answer: "Something went wrong reaching the server.", citations: [], insufficientEvidence: false },
+        ]);
+      }
     } finally {
       setLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -169,10 +192,10 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
           <select
             value={scope}
             onChange={(e) => setScope(e.target.value)}
-            className="rounded-lg border border-line bg-paper px-2 py-2 text-xs text-ink-soft"
-            aria-label="Search scope"
+            className="max-w-40 truncate rounded-lg border border-line bg-paper px-2 py-2 text-xs text-ink-soft"
+            aria-label="Document to chat with"
           >
-            <option value="">All documents</option>
+            {scope === "" && <option value="">Select a document</option>}
             {ready.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -183,8 +206,9 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && ask()}
-            placeholder="What do the documents say about..."
-            className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-4 py-2 text-sm outline-none placeholder:text-ink-faint focus:border-accent"
+            placeholder={scope ? "Ask about this document..." : "Select a document first"}
+            disabled={!scope}
+            className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-4 py-2 text-sm outline-none placeholder:text-ink-faint focus:border-accent disabled:opacity-50"
           />
           {messages.length > 0 && (
             <button
@@ -202,7 +226,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
           )}
           <button
             onClick={ask}
-            disabled={loading || !input.trim() || ready.length === 0}
+            disabled={loading || !input.trim() || !scope}
             className="rounded-lg bg-ink px-5 py-2 text-sm font-medium text-paper transition hover:bg-ink-soft disabled:opacity-40"
           >
             Ask
