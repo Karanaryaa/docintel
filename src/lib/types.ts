@@ -14,7 +14,7 @@ export interface DocumentMeta {
   ocrPages: number[];
   kind: "invoice" | "document";
   /** live human-readable ingest stage, shown while status is processing */
-  progress?: string;
+  progress?: string | null;
 }
 
 export interface Chunk {

@@ -23,6 +23,7 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
     // time so a long scan does not run its pages strictly one-by-one.
     const finalPages: PageText[] = [...pages];
     const ocrDone: number[] = [];
+    let ocrError: string | undefined;
     if (ocrPages.length > 0) {
       let finished = 0;
       let cursor = 0;
@@ -38,8 +39,10 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
               finalPages[idx] = { page: p, text };
               ocrDone.push(p);
             }
-          } catch {
-            // keep the (thin) native text if OCR fails for a page
+          } catch (err) {
+            // keep the (thin) native text if OCR fails for a page, but
+            // record the first failure so it is visible on the document
+            ocrError ??= err instanceof Error ? err.message.slice(0, 200) : "OCR failed";
           }
           finished++;
           await say(`Reading scanned pages ${finished}/${ocrPages.length}`);
@@ -71,12 +74,15 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
       pageCount,
       ocrPages: ocrDone,
       kind: isInvoice ? "invoice" : "document",
+      progress: null,
       ...(invoiceError ? { error: `invoice extraction: ${invoiceError}` } : {}),
+      ...(ocrError ? { error: `OCR failed on some pages: ${ocrError}` } : {}),
     });
     void chunkCount;
   } catch (err) {
     await store.updateDocument(doc.id, {
       status: "error",
+      progress: null,
       error: err instanceof Error ? err.message.slice(0, 400) : "processing failed",
     });
   }
