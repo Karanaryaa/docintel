@@ -16,7 +16,7 @@ const MIN_CHARS_PER_PAGE = 40;
  */
 export async function extractPdfPages(bytes: Uint8Array): Promise<PdfExtractResult> {
   const { extractText } = await import("unpdf");
-  const { text, totalPages } = await extractText(bytes, { mergePages: false });
+  const { text, totalPages } = await extractText(bytes.slice(), { mergePages: false }) // slice: pdfjs detaches the buffer it is given;
   const pages: PageText[] = (text as string[]).map((t, i) => ({
     page: i + 1,
     text: t ?? "",

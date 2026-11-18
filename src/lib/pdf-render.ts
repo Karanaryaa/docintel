@@ -50,7 +50,9 @@ export async function renderPageToPng(bytes: Uint8Array, page: number): Promise<
   const slot = Symbol.for("unpdf.canvasModule");
   if (!g[slot]) g[slot] = canvasPkg;
 
-  const pdf = await getDocumentProxy(bytes, DOC_OPTS);
+  // slice: pdfjs transfers/detaches the buffer it is given; never hand it the
+  // caller's bytes (text extraction already ran on them in this process).
+  const pdf = await getDocumentProxy(bytes.slice(), DOC_OPTS);
   const pageNum = Math.min(Math.max(1, page), pdf.numPages);
   const pg = await pdf.getPage(pageNum);
   const viewport = pg.getViewport({ scale: 2 });
@@ -80,7 +82,7 @@ export async function renderPageToDataUrl(bytes: Uint8Array, page: number): Prom
 export async function extractEmbeddedPagePng(bytes: Uint8Array, page: number): Promise<Uint8Array | null> {
   const { extractImages } = await import("unpdf");
   const canvasPkg = await import("@napi-rs/canvas");
-  const images = await extractImages(new Uint8Array(bytes), page);
+  const images = await extractImages(bytes.slice(), page); // private copy - pdfjs detaches its input
   const img = images.reduce<(typeof images)[number] | null>(
     (best, cur) => (cur.width * cur.height > (best?.width ?? 0) * (best?.height ?? 0) ? cur : best),
     null
