@@ -51,7 +51,19 @@ export async function answerQuestion(
   question: string,
   documentId?: string
 ): Promise<ChatAnswer> {
-  const ranked = await retrieve(store, question, documentId);
+  let ranked = await retrieve(store, question, documentId);
+  if ((ranked.length === 0 || ranked[0].score < MIN_SCORE) && documentId) {
+    // Generic questions about a selected document ("whats this?") don't
+    // embed closely to any specific chunk. Fall back to the start of that
+    // document so the model can describe it. The model still refuses when
+    // the question genuinely isn't covered - only the context changes.
+    const head = (await store.allChunks())
+      .filter((c) => c.documentId === documentId && c.embedding)
+      .sort((a, b) => a.index - b.index)
+      .slice(0, 4)
+      .map((c) => ({ ...c, score: 1 }));
+    if (head.length > 0) ranked = head;
+  }
   if (ranked.length === 0 || ranked[0].score < MIN_SCORE) {
     return {
       answer: "I could not find anything about that in the uploaded documents.",

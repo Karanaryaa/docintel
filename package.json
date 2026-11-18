@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/lib/__tests__/chunk.test.ts src/lib/__tests__/invoice-checks.test.ts",
+    "test": "tsx --test src/lib/__tests__/chunk.test.ts src/lib/__tests__/invoice-checks.test.ts src/lib/__tests__/pdf-render.test.ts",
     "test:e2e": "tsx scripts/e2e-local.mjs"
   },
   "dependencies": {

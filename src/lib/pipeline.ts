@@ -1,4 +1,5 @@
 import { extractPdfPages, looksLikeInvoice } from "./pdf-extract";
+import { renderPageToDataUrl } from "./pdf-render";
 import { ocrPageImage } from "./ai";
 import { indexDocument } from "./rag";
 import { extractInvoice } from "./invoice-extract";
@@ -64,18 +65,3 @@ export async function processDocument(store: Store, doc: DocumentMeta): Promise<
   }
 }
 
-async function renderPageToDataUrl(bytes: Uint8Array, page: number): Promise<string> {
-  const { getDocumentProxy } = await import("unpdf");
-  const { createCanvas } = await import("@napi-rs/canvas");
-  const pdf = await getDocumentProxy(bytes);
-  const pg = await pdf.getPage(page);
-  const viewport = pg.getViewport({ scale: 2 });
-  const canvas = createCanvas(viewport.width, viewport.height);
-  const ctx = canvas.getContext("2d");
-  await pg.render({
-    canvasContext: ctx as unknown as CanvasRenderingContext2D,
-    canvas: canvas as unknown as HTMLCanvasElement,
-    viewport,
-  } as unknown as Parameters<typeof pg.render>[0]).promise;
-  return canvas.toDataURL("image/png");
-}
