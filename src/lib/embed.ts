@@ -13,9 +13,10 @@
  *
  * Local runs on the Node.js runtime only (not Edge).
  */
-import { env, pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
-
-env.allowLocalModels = false;
+// Imported dynamically inside getPipeline(): the static import drags in
+// onnxruntime-node, which is not installable in the serverless bundle, and
+// production never uses the local fallback anyway (fail closed).
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 
 const LOCAL_MODEL = process.env.EMBEDDING_MODEL ?? "Xenova/multilingual-e5-small";
 const NIM_MODEL = process.env.AI_EMBED_MODEL ?? "nvidia/nemotron-3.5-embed-1b";
@@ -61,7 +62,11 @@ let pipePromise: Promise<FeatureExtractionPipeline> | null = null;
 
 function getPipeline(): Promise<FeatureExtractionPipeline> {
   if (!pipePromise) {
-    pipePromise = pipeline("feature-extraction", LOCAL_MODEL, { dtype: "q8" }) as Promise<FeatureExtractionPipeline>;
+    pipePromise = (async () => {
+      const { env, pipeline } = await import("@huggingface/transformers");
+      env.allowLocalModels = false;
+      return pipeline("feature-extraction", LOCAL_MODEL, { dtype: "q8" }) as Promise<FeatureExtractionPipeline>;
+    })();
   }
   return pipePromise;
 }
