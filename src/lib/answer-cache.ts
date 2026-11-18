@@ -14,7 +14,7 @@ function enabled(): boolean {
 
 // Bump when the prompt, model or citation format changes so older cached
 // answers are never served against a new answering contract.
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 
 export function normalizeQuestion(q: string): string {
   return `${CACHE_VERSION}:${q.trim().toLowerCase().replace(/\s+/g, " ")}`;

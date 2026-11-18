@@ -106,8 +106,16 @@ export class SupabaseStore implements Store {
 
   async allChunks(documentId?: string): Promise<Chunk[]> {
     // Filter server-side: pulling every chunk of every document (with full
-    // embedding vectors) took 7-8s per question before this.
-    return rest<Chunk[]>(`chunks?select=*${documentId ? `&documentId=eq.${documentId}` : ""}`);
+    // embedding vectors) took 7-8s per question before this. Page through
+    // results: PostgREST caps a response at 1000 rows, and one real document
+    // already holds 878 chunks.
+    const filter = documentId ? `&documentId=eq.${documentId}` : "";
+    const out: Chunk[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const page = await rest<Chunk[]>(`chunks?select=*${filter}&order=index.asc&offset=${offset}`);
+      out.push(...page);
+      if (page.length < 1000) return out;
+    }
   }
 
   async putInvoice(record: InvoiceRecord): Promise<void> {

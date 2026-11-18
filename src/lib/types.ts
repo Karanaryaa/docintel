@@ -27,6 +27,8 @@ export interface Chunk {
 }
 
 export interface Citation {
+  /** The model's original [n] marker number, so chips never renumber. */
+  marker: number;
   documentId: string;
   documentName: string;
   page: number;

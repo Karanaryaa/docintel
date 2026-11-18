@@ -59,13 +59,15 @@ export async function POST(req: NextRequest) {
 
   const citations: Citation[] = [];
   const used = new Set<number>();
-  for (const m of raw.matchAll(/\[(\d+)\]/g)) {
-    const n = parseInt(m[1], 10);
-    if (n >= 1 && n <= perDoc.length) used.add(n);
+  for (const m of raw.matchAll(/\[([\d,\s]+)\]/g)) {
+    for (const part of m[1].split(",")) {
+      const n = parseInt(part.trim(), 10);
+      if (Number.isFinite(n) && n >= 1 && n <= perDoc.length) used.add(n);
+    }
   }
   for (const n of used) {
     const e = perDoc[n - 1];
-    citations.push({ documentId: e.documentId, documentName: e.name, page: e.page, excerpt: e.excerpt.slice(0, 280) });
+    citations.push({ marker: n, documentId: e.documentId, documentName: e.name, page: e.page, excerpt: e.excerpt.slice(0, 280) });
   }
 
   return NextResponse.json({ comparison: raw, citations });

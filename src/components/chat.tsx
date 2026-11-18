@@ -261,7 +261,7 @@ export function ChatPanel({ documents, selectedId, onOpenCitation }: Props) {
                         title={c.excerpt}
                         className="rounded-full border border-accent/30 bg-accent/5 px-2.5 py-1 text-[11px] font-medium text-accent-deep transition hover:bg-accent/15"
                       >
-                        [{j + 1}] {c.documentName} · p.{c.page}
+                        [{c.marker ?? j + 1}] {c.documentName} · p.{c.page}
                       </button>
                     ))}
                   </div>

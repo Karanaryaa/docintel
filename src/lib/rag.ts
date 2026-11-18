@@ -32,7 +32,13 @@ interface RankedChunk extends Chunk {
   score: number;
 }
 
-async function retrieve(store: Store, question: string, documentId?: string): Promise<RankedChunk[]> {
+interface Retrieval {
+  ranked: RankedChunk[];
+  /** True when the embedding provider was unreachable and term-overlap ranking was used. */
+  lexical: boolean;
+}
+
+async function retrieve(store: Store, question: string, documentId?: string): Promise<Retrieval> {
   // Embed and fetch in parallel; the fetch is filtered server-side by document.
   const [q, all] = await Promise.all([
     embedQuery(question).catch(() => null),
@@ -43,7 +49,7 @@ async function retrieve(store: Store, question: string, documentId?: string): Pr
       .filter((c) => c.embedding && (!documentId || c.documentId === documentId))
       .map((c) => ({ ...c, score: cosine(q, c.embedding!) }))
       .sort((a, b) => b.score - a.score);
-    return ranked.slice(0, TOP_K);
+    return { ranked: ranked.slice(0, TOP_K), lexical: false };
   }
   // Embedding provider unreachable: degrade to lexical overlap so the
   // question still gets a grounded, cited answer instead of hanging.
@@ -57,7 +63,7 @@ async function retrieve(store: Store, question: string, documentId?: string): Pr
     })
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score);
-  return ranked.slice(0, TOP_K);
+  return { ranked: ranked.slice(0, TOP_K), lexical: true };
 }
 
 /**
@@ -81,8 +87,8 @@ async function retrieveWithFallback(
   store: Store,
   question: string,
   documentId?: string
-): Promise<RankedChunk[]> {
-  let ranked = await retrieve(store, question, documentId);
+): Promise<Retrieval> {
+  let { ranked, lexical } = await retrieve(store, question, documentId);
   if ((ranked.length === 0 || ranked[0].score < MIN_SCORE) && documentId) {
     // Generic questions about a selected document ("whats this?") don't
     // embed closely to any specific chunk. Fall back to the start of that
@@ -95,7 +101,7 @@ async function retrieveWithFallback(
       .map((c) => ({ ...c, score: 1 }));
     if (head.length > 0) ranked = head;
   }
-  return ranked;
+  return { ranked, lexical };
 }
 
 async function docNames(store: Store, ranked: RankedChunk[]): Promise<Map<string, string>> {
@@ -129,7 +135,7 @@ export async function answerQuestion(
     const hit = await getCachedAnswer(documentId, question).catch(() => null);
     if (hit) return hit;
   }
-  const ranked = await retrieveWithFallback(store, question, documentId);
+  const { ranked, lexical } = await retrieveWithFallback(store, question, documentId);
   if (ranked.length === 0 || ranked[0].score < MIN_SCORE) {
     return {
       answer: "I could not find anything about that in the uploaded documents.",
@@ -143,7 +149,10 @@ export async function answerQuestion(
   const messages = buildMessages(context, question);
   const raw = await chat(messages, { maxTokens: 1024 });
   const answer = finalizeAnswer(raw, ranked, docs);
-  if (documentId) await setCachedAnswer(documentId, question, answer).catch(() => {});
+  // Degraded-retrieval answers and refusals are never cached.
+  if (documentId && !lexical && !answer.insufficientEvidence) {
+    await setCachedAnswer(documentId, question, answer).catch(() => {});
+  }
   return answer;
 }
 
@@ -164,22 +173,30 @@ function buildMessages(context: string, question: string) {
 }
 
 export function finalizeAnswer(raw: string, ranked: RankedChunk[], docs: Map<string, string>): ChatAnswer {
-  const insufficient = /documents do not say/i.test(raw);
+  // Walk every bracket group: keep only numbers that map to a retrieved
+  // chunk, rewrite the displayed text so no dangling [9] or [1, 9] survives,
+  // and record each citation under its ORIGINAL marker number so chips never
+  // renumber against the text.
+  const used = new Set<number>();
+  let answer = raw.replace(/\[([\d,\s]+)\]/g, (whole, group: string) => {
+    const valid = group
+      .split(",")
+      .map((part) => parseInt(part.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= ranked.length);
+    if (valid.length === 0) return "";
+    for (const n of valid) used.add(n);
+    return valid.length === 1 ? `[${valid[0]}]` : `[${valid.join(", ")}]`;
+  });
+  // A refusal only stands when the answer cites nothing - a mixed answer
+  // ("the documents do not say X, but Y is Rs 50 [1]") keeps its citations.
+  const insufficient = used.size === 0 && /documents do not say/i.test(answer);
+  if (insufficient) answer = "The documents do not say.";
   const citations: Citation[] = [];
   if (!insufficient) {
-    const used = new Set<number>();
-    // Models cite both single markers ([1]) and grouped ones ([1, 2]); a
-    // plain \[(\d+)\] misses grouped numbers entirely, leaving the chip
-    // list short. Parse every number inside any bracket group.
-    for (const m of raw.matchAll(/\[([\d,\s]+)\]/g)) {
-      for (const part of m[1].split(",")) {
-        const n = parseInt(part.trim(), 10);
-        if (Number.isFinite(n) && n >= 1 && n <= ranked.length) used.add(n);
-      }
-    }
     for (const n of [...used].sort((a, b) => a - b)) {
       const c = ranked[n - 1];
       citations.push({
+        marker: n,
         documentId: c.documentId,
         documentName: docs.get(c.documentId) ?? c.documentId,
         page: c.page,
@@ -187,7 +204,7 @@ export function finalizeAnswer(raw: string, ranked: RankedChunk[], docs: Map<str
       });
     }
   }
-  return { answer: raw, citations, insufficientEvidence: insufficient };
+  return { answer, citations, insufficientEvidence: insufficient };
 }
 
 export type AnswerEvent =
@@ -224,7 +241,7 @@ export async function* answerQuestionEvents(
   }
 
   yield { type: "stage", text: "Finding the relevant pages" };
-  const ranked = await retrieveWithFallback(store, question, documentId);
+  const { ranked, lexical } = await retrieveWithFallback(store, question, documentId);
   if (ranked.length === 0 || ranked[0].score < MIN_SCORE) {
     const answer: ChatAnswer = {
       answer: "I could not find anything about that in the uploaded documents.",
@@ -287,7 +304,7 @@ export async function* answerQuestionEvents(
   // [DONE], not cut off by the token cap): a stream that died mid-generation
   // or was truncated never enters the cache, so repeats never serve a
   // cut-off answer as if it were the full one.
-  if (documentId && sawDone && !truncated) {
+  if (documentId && sawDone && !truncated && !lexical && !answer.insufficientEvidence) {
     await setCachedAnswer(documentId, question, answer).catch(() => {});
   }
   yield { type: "final", answer };

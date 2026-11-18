@@ -34,24 +34,27 @@ function useNim(): boolean {
 
 async function nimEmbed(texts: string[], inputType: "query" | "passage"): Promise<number[][]> {
   // The trial endpoint queues unpredictably (measured 0.2s to >45s for the
-  // same input). Without a timeout a stuck queue held every question
-  // forever; 20s + one retry keeps the app responsive, and the caller can
-  // fall back to lexical ranking on failure.
+  // same input). Queries get a short timeout + one retry so a stuck queue
+  // degrades to lexical ranking instead of hanging the question; passage
+  // batches (ingest) legitimately run long, so they get a generous budget.
+  const timeoutMs = inputType === "query" ? 20_000 : 180_000;
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await nimEmbedOnce(texts, inputType);
+      return await nimEmbedOnce(texts, inputType, timeoutMs);
     } catch (err) {
       lastErr = err;
+      // 4xx (bad request, bad key) fails identically on retry - do not wait twice.
+      if (err instanceof Error && /Embedding provider 4\d\d/.test(err.message)) break;
     }
   }
   throw lastErr;
 }
 
-async function nimEmbedOnce(texts: string[], inputType: "query" | "passage"): Promise<number[][]> {
+async function nimEmbedOnce(texts: string[], inputType: "query" | "passage", timeoutMs: number): Promise<number[][]> {
   const res = await fetch(`${NIM_BASE}/embeddings`, {
     method: "POST",
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       Authorization: `Bearer ${process.env.AI_API_KEY}`,
       "Content-Type": "application/json",
