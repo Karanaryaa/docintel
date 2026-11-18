@@ -3,7 +3,7 @@
  *
  * When AI_API_KEY is set (production), embeddings go through the NVIDIA NIM
  * OpenAI-compatible /v1/embeddings endpoint (model AI_EMBED_MODEL, default
- * nvidia/llama-3.2-nv-embedqa-1b-v1). This keeps serverless cold starts fast:
+ * nvidia/nemotron-3.5-embed-1b). This keeps serverless cold starts fast:
  * no model files are downloaded into the function instance.
  *
  * Without a key (local dev / tests), falls back to local transformers.js with
@@ -18,7 +18,7 @@ import { env, pipeline, type FeatureExtractionPipeline } from "@huggingface/tran
 env.allowLocalModels = false;
 
 const LOCAL_MODEL = process.env.EMBEDDING_MODEL ?? "Xenova/multilingual-e5-small";
-const NIM_MODEL = process.env.AI_EMBED_MODEL ?? "nvidia/llama-3.2-nv-embedqa-1b-v1";
+const NIM_MODEL = process.env.AI_EMBED_MODEL ?? "nvidia/nemotron-3.5-embed-1b";
 const NIM_BASE = process.env.AI_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
 
 function useNim(): boolean {

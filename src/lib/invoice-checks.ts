@@ -74,8 +74,12 @@ export function checkInvoice(
     }
   }
 
-  if (fields.taxRate !== null && base !== null && fields.taxAmount !== null && base > 0) {
-    const computedTax = (base * fields.taxRate) / 100;
+  // Tax is judged against the itemized base when line items exist: if the
+  // items sum to X and the stated rate implies a different tax than printed,
+  // the invoice is internally inconsistent even when its subtotal agrees.
+  const taxBase = hasItemAmounts ? itemSum : base;
+  if (fields.taxRate !== null && taxBase !== null && fields.taxAmount !== null && taxBase > 0) {
+    const computedTax = (taxBase * fields.taxRate) / 100;
     if (!near(computedTax, fields.taxAmount)) {
       flags.push({
         code: "TAX_MISMATCH",

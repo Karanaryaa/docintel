@@ -22,7 +22,7 @@ structured invoice fields, and compare documents side by side.
 | `AI_BASE_URL` | no | `https://integrate.api.nvidia.com/v1` | OpenAI-compatible endpoint |
 | `AI_CHAT_MODEL` | no | `nvidia/nemotron-3-ultra-550b-a55b` | Q&A + structured extraction |
 | `AI_VISION_MODEL` | no | `nvidia/nemotron-3.5-super-vl-120b-a12b` | scanned-page OCR |
-| `AI_EMBED_MODEL` | no | `nvidia/llama-3.2-nv-embedqa-1b-v1` | retrieval embeddings |
+| `AI_EMBED_MODEL` | no | `nvidia/nemotron-3.5-embed-1b` | retrieval embeddings |
 | `SUPABASE_URL` | production | - | e.g. `https://<ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | production | - | service-role key (server only) |
 
