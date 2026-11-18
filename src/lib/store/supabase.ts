@@ -11,6 +11,16 @@ import type { Store } from "./types";
 const URL = () => process.env.SUPABASE_URL!;
 const KEY = () => process.env.SUPABASE_SECRET_KEY!;
 
+/**
+ * PostgREST filter for the atomic ingest claim. Logic trees (or/and) only
+ * accept dot-notation operators - `status=in.(...)` fails to parse server-
+ * side (PGRST100), which previously killed every claim. Kept as a pure
+ * function so the exact query string is unit-testable.
+ */
+export function buildClaimFilter(staleBefore: string): string {
+  return `or=(status.in.(uploaded,error),and(status.eq.processing,createdAt.lt.${staleBefore}))`;
+}
+
 async function rest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${URL()}/rest/v1/${path}`, {
     ...init,
@@ -72,7 +82,7 @@ export class SupabaseStore implements Store {
     // went stale (its uploader died mid-run). The conditional UPDATE is the
     // atomic claim: two concurrent claimants cannot both match.
     const staleBefore = new Date(Date.now() - 6 * 60_000).toISOString();
-    const filter = `or=(status=in.(uploaded,error),and(status=eq.processing,createdAt=lt.${staleBefore}))`;
+    const filter = buildClaimFilter(staleBefore);
     const rows = await rest<Array<{ id: string }>>(
       `documents?id=eq.${id}&${filter}`,
       {

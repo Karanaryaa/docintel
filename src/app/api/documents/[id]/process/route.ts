@@ -23,13 +23,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (doc.status === "ready") {
     return NextResponse.json({ ok: true, status: doc.status });
   }
-  // Atomic claim: only one runner proceeds; a concurrent or duplicate fire
-  // gets 202 while the first finishes. Error docs are retryable.
-  const claimed = store.claimDocument ? await store.claimDocument(id) : true;
-  if (!claimed) {
-    return NextResponse.json({ ok: true, status: "processing" }, { status: 202 });
+  try {
+    // Atomic claim: only one runner proceeds; a concurrent or duplicate fire
+    // gets 202 while the first finishes. Error docs are retryable.
+    const claimed = store.claimDocument ? await store.claimDocument(id) : true;
+    if (!claimed) {
+      return NextResponse.json({ ok: true, status: "processing" }, { status: 202 });
+    }
+    await processDocument(store, doc);
+    const final = await store.getDocument(id);
+    return NextResponse.json({ ok: true, status: final?.status });
+  } catch (err) {
+    // Never fail silently: the document itself carries the real reason so the
+    // UI shows a failed state (retryable via the claim) instead of spinning.
+    const message = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
+    await store
+      .updateDocument(id, { status: "error", progress: null, error: `Processing failed: ${message}` })
+      .catch(() => {});
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-  await processDocument(store, doc);
-  const final = await store.getDocument(id);
-  return NextResponse.json({ ok: true, status: final?.status });
 }
