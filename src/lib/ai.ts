@@ -1,24 +1,24 @@
-const GROQ_BASE = "https://api.groq.com/openai/v1";
+const AI_BASE = process.env.AI_BASE_URL ?? "https://integrate.api.nvidia.com/v1";
 
-export function groqKey(): string {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) throw new Error("GROQ_API_KEY is not set");
+export function aiKey(): string {
+  const key = process.env.AI_API_KEY;
+  if (!key) throw new Error("AI_API_KEY is not set");
   return key;
 }
 
-export const CHAT_MODEL = process.env.GROQ_CHAT_MODEL ?? "openai/gpt-oss-120b";
-export const VISION_MODEL = process.env.GROQ_VISION_MODEL ?? "qwen/qwen3.8-27b";
+export const CHAT_MODEL = process.env.AI_CHAT_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b";
+export const VISION_MODEL = process.env.AI_VISION_MODEL ?? "nvidia/nemotron-3.5-super-vl-120b-a12b";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 }
 
-async function groqChat(messages: ChatMessage[], opts: { model?: string; json?: boolean; maxTokens?: number; temperature?: number } = {}): Promise<string> {
-  const res = await fetch(`${GROQ_BASE}/chat/completions`, {
+async function aiChat(messages: ChatMessage[], opts: { model?: string; json?: boolean; maxTokens?: number; temperature?: number } = {}): Promise<string> {
+  const res = await fetch(`${AI_BASE}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${groqKey()}`,
+      Authorization: `Bearer ${aiKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -31,20 +31,20 @@ async function groqChat(messages: ChatMessage[], opts: { model?: string; json?: 
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Groq ${res.status}: ${body.slice(0, 500)}`);
+    throw new Error(`AI provider ${res.status}: ${body.slice(0, 500)}`);
   }
   const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
   return data.choices[0]?.message?.content ?? "";
 }
 
 /** Plain-text chat completion. */
-export function chat(messages: ChatMessage[], opts?: Parameters<typeof groqChat>[1]) {
-  return groqChat(messages, opts);
+export function chat(messages: ChatMessage[], opts?: Parameters<typeof aiChat>[1]) {
+  return aiChat(messages, opts);
 }
 
 /** Chat completion constrained to a JSON object response; parses and returns it. */
-export async function chatJson<T>(messages: ChatMessage[], opts?: Parameters<typeof groqChat>[1]): Promise<T> {
-  const raw = await groqChat(messages, { ...opts, json: true });
+export async function chatJson<T>(messages: ChatMessage[], opts?: Parameters<typeof aiChat>[1]): Promise<T> {
+  const raw = await aiChat(messages, { ...opts, json: true });
   return JSON.parse(raw) as T;
 }
 
@@ -53,7 +53,7 @@ export async function chatJson<T>(messages: ChatMessage[], opts?: Parameters<typ
  * page's full text, tables included, in reading order.
  */
 export function ocrPageImage(dataUrl: string, model?: string): Promise<string> {
-  return groqChat(
+  return aiChat(
     [
       {
         role: "user",

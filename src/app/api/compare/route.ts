@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { cosine } from "@/lib/chunk";
 import { embedQuery } from "@/lib/embed";
-import { chat } from "@/lib/groq";
+import { chat } from "@/lib/ai";
 import type { Citation } from "@/lib/types";
 
 export const maxDuration = 300;

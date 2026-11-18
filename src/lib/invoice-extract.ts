@@ -1,4 +1,4 @@
-import { chatJson } from "./groq";
+import { chatJson } from "./ai";
 import { checkInvoice } from "./invoice-checks";
 import type { InvoiceFields, InvoiceRecord } from "./types";
 import type { Store } from "./store/types";

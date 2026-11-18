@@ -1,5 +1,5 @@
 import { extractPdfPages, looksLikeInvoice } from "./pdf-extract";
-import { ocrPageImage } from "./groq";
+import { ocrPageImage } from "./ai";
 import { indexDocument } from "./rag";
 import { extractInvoice } from "./invoice-extract";
 import type { DocumentMeta } from "./types";

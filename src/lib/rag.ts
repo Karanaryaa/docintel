@@ -1,6 +1,6 @@
 import { chunkPages, cosine, type PageText } from "./chunk";
 import { embedPassages, embedQuery } from "./embed";
-import { chat } from "./groq";
+import { chat } from "./ai";
 import type { ChatAnswer, Chunk, Citation, DocumentMeta } from "./types";
 import type { Store } from "./store/types";
 
